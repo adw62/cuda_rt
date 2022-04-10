@@ -36,19 +36,20 @@ obj_pos = np.array([[-0.2, 0, -1],
                     [-0.3, 0, 0],
                     [0, -9000, 0]], 'f')
 cameras = np.array([[0, 0, 1]], 'f')
-lights = np.array([[5, 5, i] for i in np.linspace(0, 5, 100)], 'f')
+lights = np.array([[5, 5, i] for i in np.linspace(0, 5, 200)], 'f')
 for i, light in enumerate(lights):
     print(i)
-    if i < 25:
-        obj_pos[0][0] += 0.1
-        obj_pos[0][1] += 0.01
+    if i < 100:
+        obj_pos[0][0] += 0.01
+        obj_pos[0][1] += 0.001
+        obj_pos[1][1] += 0.01
     else:
-        obj_pos[0][0] -= 0.1
+        obj_pos[0][0] -= 0.01
+        obj_pos[1][1] -= 0.01
     rt(cameras, np.array([light]), obj_pos, obj_amb, obj_diff, obj_spec, obj_size, obj_shine, obj_refl, pixels, pix_loc)
     pixels = np.clip(pixels, 0, 1)
     pixels.shape = (x, y, 3)
     plt.imsave(f'./img/{i:03}_img.png', pixels)
     pixels = pixels*0.0
     pixels.shape = (1572864, 3)
-
 
