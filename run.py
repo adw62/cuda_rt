@@ -26,30 +26,32 @@ obj_refl = np.array([0.5,
                      0.5,
                      0.5,
                      0.5], 'f')
-pixels = np.zeros([1572864, 3], 'f')
-x = 1536
-y = 1024
+x = 1024
+y = 1536
+xy = 1572864
+pixels = np.zeros([xy, 3], 'f')
 
-pix_loc = np.array([[i, j] for i in np.linspace(-1, 1, x) for j in np.linspace(-1, 1, y)], 'f')
+pix_loc = np.array([[j, i] for i in np.linspace(1, -1, x) for j in np.linspace(-1, 1, y)], 'f')
 obj_pos = np.array([[-0.2, 0, -1],
                     [0.1, -0.3, 0],
                     [-0.3, 0, 0],
                     [0, -9000, 0]], 'f')
-cameras = np.array([[0, 0, 1]], 'f')
-lights = np.array([[5, 5, i] for i in np.linspace(0, 5, 200)], 'f')
-for i, light in enumerate(lights):
+
+cameras = np.array([[0, 0, i] for i in np.linspace(1, 3, 120)], 'f')
+lights = np.array([[i, 5, 5] for i in np.linspace(-10, 10, 120)], 'f')
+for i, (camera, light) in enumerate(zip(cameras, lights)):
     print(i)
-    if i < 100:
+    if i < 60:
         obj_pos[0][0] += 0.01
         obj_pos[0][1] += 0.001
         obj_pos[1][1] += 0.01
     else:
         obj_pos[0][0] -= 0.01
         obj_pos[1][1] -= 0.01
-    rt(cameras, np.array([light]), obj_pos, obj_amb, obj_diff, obj_spec, obj_size, obj_shine, obj_refl, pixels, pix_loc)
+    rt(np.array([camera]), np.array([light]), obj_pos, obj_amb, obj_diff, obj_spec, obj_size, obj_shine, obj_refl, pixels, pix_loc)
     pixels = np.clip(pixels, 0, 1)
     pixels.shape = (x, y, 3)
     plt.imsave(f'./img/{i:03}_img.png', pixels)
     pixels = pixels*0.0
-    pixels.shape = (1572864, 3)
+    pixels.shape = (xy, 3)
 
