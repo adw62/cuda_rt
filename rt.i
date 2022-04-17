@@ -1,7 +1,8 @@
 %module rt
 
 %{
-    #define SWIG_FILE_WITH_INIT 
+    #define SWIG_FILE_WITH_INIT
+    #include "rt.h"
 %}
 
 %include "numpy.i"
@@ -25,17 +26,5 @@
 
 %apply (float* INPLACE_ARRAY2, int DIM1, int DIM2) {(float* pixels, int n, int m)}
 
-%inline %{
-void rt(float *cameras, int d1, int f1, float *lights, int d2, int f2,
-                float *obj_pos, int obj_num1, int d3,
-                float *obj_amb, int obj_num2, int d4,
-                float *obj_diff, int obj_num3, int d5,
-                float *obj_spec, int obj_num4, int d6,
-                float *obj_size, int obj_num5,
-                float *obj_shine, int obj_num6,
-                float *obj_refl, int obj_num7,
-                float *pixels, int n, int m,
-                float *pix_loc, int n1, int d7);
-%}
-
+%include "rt.h"
 

@@ -1,6 +1,10 @@
 from rt import rt
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.spatial.transform import Rotation as R
+
+#Transparnacy
+#complex camera moves
 
 obj_amb = np.array([[0.1, 0, 0],
                     [0.1, 0, 0.1],
@@ -37,18 +41,17 @@ obj_pos = np.array([[-0.2, 0, -1],
                     [-0.3, 0, 0],
                     [0, -9000, 0]], 'f')
 
-cameras = np.array([[0, 0, i] for i in np.linspace(1, 3, 120)], 'f')
-lights = np.array([[i, 5, 5] for i in np.linspace(-10, 10, 120)], 'f')
+frames = 500
+cameras = np.array([[[0, 0, 3], [0, i, 0], [-0.2, 0, -1]] for i in np.linspace(0, 6, frames)], 'f')
+lights = np.array([[i, 5, 5] for i in np.linspace(-10, 10, frames)], 'f')
 for i, (camera, light) in enumerate(zip(cameras, lights)):
     print(i)
-    if i < 60:
-        obj_pos[0][0] += 0.01
+    if i < int(frames*0.3):
         obj_pos[0][1] += 0.001
         obj_pos[1][1] += 0.01
     else:
-        obj_pos[0][0] -= 0.01
         obj_pos[1][1] -= 0.01
-    rt(np.array([camera]), np.array([light]), obj_pos, obj_amb, obj_diff, obj_spec, obj_size, obj_shine, obj_refl, pixels, pix_loc)
+    rt(camera, np.array([light]), obj_pos, obj_amb, obj_diff, obj_spec, obj_size, obj_shine, obj_refl, pixels, pix_loc)
     pixels = np.clip(pixels, 0, 1)
     pixels.shape = (x, y, 3)
     plt.imsave(f'./img/{i:03}_img.png', pixels)

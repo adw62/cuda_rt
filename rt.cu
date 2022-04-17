@@ -50,6 +50,29 @@ inline __device__ float3 normalize(float3& a) {
     return make_float3(a.x/mag, a.y/mag, a.z/mag);
 }
 
+inline __device__ float3 rotate(float3& a, float3& cam_angle, float3& rot_center) {
+    float3 new_pix = {0, 0, 0};
+    //rotate around z axis
+    float adjusted_x = a.x - rot_center.x;
+    float adjusted_y = a.y - rot_center.y;
+    float adjusted_z = a.z - rot_center.z;
+    new_pix.x = a.x*cos(cam_angle.z) + a.y*sin(cam_angle.z);
+    new_pix.y = -1*a.x*sin(cam_angle.z) + a.y*cos(cam_angle.z);
+    new_pix.z = a.z;
+
+    //rotate around y axis
+    new_pix.x = new_pix.x*cos(cam_angle.y) - new_pix.z*sin(cam_angle.y);
+    new_pix.y = new_pix.y;
+    new_pix.z = new_pix.x*sin(cam_angle.y) + new_pix.z*cos(cam_angle.y);
+
+    //rotate around x axis
+    new_pix.x = new_pix.x;
+    new_pix.y = new_pix.y*cos(cam_angle.x) + new_pix.z*sin(cam_angle.x);
+    new_pix.z = -1*new_pix.y*sin(cam_angle.x) + new_pix.z*cos(cam_angle.x);
+
+    return new_pix;
+}
+
 inline __device__ float intersect(float3& center, float& size, float3& origin, float3& direction) {
     float3 tmp = origin-center;
     float b = 2*dot(direction, tmp);
@@ -100,50 +123,68 @@ void rt_kernel(float3 *dpixels, float *dobj_size, float *dobj_shine, float *dobj
     float3 amb_l = {1, 1, 1};
     float3 diff_l = {1, 1, 1};
     float3 spec_l = {1, 1, 1};
-    float3 origin = dcameras[0];
-    float3 cam = dcameras[0];
-    float3 light = dlights[0];
 
-    float3 pixel = {dpix_loc[i].x, dpix_loc[i].y, 0};
+    float3 light = dlights[0];
+    float tmp1 = 0;
+    float3 tmp = {0, 0, 0};
+
+    float3 cam_angle = dcameras[1];
+    float3 cam = dcameras[0];
+
+    cam = rotate(cam, cam_angle, dcameras[2]);
+    float3 origin = cam;
+
+    //the screen is tied to the camera
+    tmp = {dpix_loc[i].x+cam.x, dpix_loc[i].y+cam.y, 0+(cam.z-1)};
+    float3 pixel = rotate(tmp, cam_angle, dcameras[2]);
     float3 direction = pixel-origin;
     direction = normalize(direction);
 
-    float3 color = {0, 0, 0};
+    int max_depth = 3;
     float reflection = 1;
+    float intersection_to_light_distance = 0;
+    float shift = 0.00001;
+    float2 res = {0, 0};
+    float2 res1 = {0, 0};
+    float3 intersection = {0, 0, 0};
+    float3 normal_to_surface = {0, 0, 0};
+    float3 shifted_point = {0, 0, 0};
+    float3 intersection_to_light = {0, 0, 0};
+    float3 illumination = {0, 0, 0};
+    float3 intersection_to_camera = {0, 0, 0};
+    float3 H = {0, 0, 0};
+    float3 color = {0, 0, 0};
 
     //loop over a depth of ray casts
-    int max_depth = 3;
     for (int k = 0; k < max_depth; ++k) {
         //look for distance to objects
         //{nearest_obj, min_dist}
-        float2 res = nearest_intersected_object(dobj_pos, dobj_size, origin, direction, num_obj);
+        res = nearest_intersected_object(dobj_pos, dobj_size, origin, direction, num_obj);
         int nearest_obj = res.x;
         if (nearest_obj > num_obj){
             break;
         }
-        float3 tmp = res.y*direction;
-        float3 intersection = origin + tmp;
+        tmp = res.y*direction;
+        intersection = origin + tmp;
         tmp = intersection - dobj_pos[nearest_obj];
-        float3 normal_to_surface  = normalize(tmp);
-        float shift = 0.00001;
+        normal_to_surface  = normalize(tmp);
         tmp = shift*normal_to_surface;
-        float3 shifted_point = intersection + tmp;
+        shifted_point = intersection + tmp;
         tmp = light - shifted_point;
-        float3 intersection_to_light = normalize(tmp);
+        intersection_to_light = normalize(tmp);
 
-        float2 res1 = nearest_intersected_object(dobj_pos, dobj_size, shifted_point, intersection_to_light, num_obj);
+        res1 = nearest_intersected_object(dobj_pos, dobj_size, shifted_point, intersection_to_light, num_obj);
         tmp = light-intersection;
-        float intersection_to_light_distance = norm_(tmp);
+        intersection_to_light_distance = norm_(tmp);
         if (res1.y < intersection_to_light_distance) {
             break;
         }
-        float3 illumination = {0, 0, 0};
+        illumination = {0, 0, 0};
         //amb
         tmp = amb_l*dobj_amb[nearest_obj];
         illumination += tmp;
 
         //diffuse
-        float tmp1 = 0;
         tmp1 = dot(intersection_to_light, normal_to_surface);
         tmp = tmp1*diff_l;
         tmp = dobj_diff[nearest_obj]*tmp;
@@ -151,9 +192,9 @@ void rt_kernel(float3 *dpixels, float *dobj_size, float *dobj_shine, float *dobj
 
         //specular
         tmp = cam - intersection;
-        float3 intersection_to_camera = normalize(tmp);
+        intersection_to_camera = normalize(tmp);
         tmp = intersection_to_light + intersection_to_camera;
-        float3 H = normalize(tmp);
+        H = normalize(tmp);
         tmp = spec_l * dobj_spec[nearest_obj];
         tmp1 = pow(dot(normal_to_surface, H), (dobj_shine[nearest_obj]/4));
         illumination += tmp1 * tmp;
@@ -168,6 +209,7 @@ void rt_kernel(float3 *dpixels, float *dobj_size, float *dobj_shine, float *dobj
     //pixels is array of float need to be array of float3 to store rgb
     dpixels[i] = color;
     }
+
 }
 
 void rt(float *cameras, int f1, int d1, float *lights, int f2, int d2,
@@ -182,7 +224,7 @@ void rt(float *cameras, int f1, int d1, float *lights, int f2, int d2,
                 float *pix_loc, int n1, int d7) {
 
     //check number of frames for camera and light are the same
-    assert(f1==f2);
+    //assert(f1==f2);
     //check number of objects the same in all data input
     assert(obj_num1==obj_num2);
     assert(obj_num2==obj_num3);
@@ -197,36 +239,25 @@ void rt(float *cameras, int f1, int d1, float *lights, int f2, int d2,
     assert(d3==d4);
     assert(d4==d5);
     assert(d5==d6);
-
+    //check pixel dim is same between color array and location array
     assert(n==n1);
 
-    //build all device arrays
-    float* dobj_size = new float[obj_num1]();
-    float* dobj_shine = new float[obj_num1]();
-    float* dobj_refl = new float[obj_num1]();
+    float3 *dpixels, *dobj_pos, *dobj_amb, *dobj_diff, *dobj_spec, *dcameras, *dlights;
+    float *dobj_size, *dobj_shine, *dobj_refl;
+    float2 *dpix_loc;
 
-    float3* dpixels = new float3[n]();
-    float2* dpix_loc = new float2[n]();
-    float3* dobj_pos = new float3[obj_num1]();
-    float3* dobj_amb = new float3[obj_num1]();
-    float3* dobj_diff = new float3[obj_num1]();
-    float3* dobj_spec = new float3[obj_num1]();
-    float3* dcameras = new float3[f1]();
-    float3* dlights = new float3[f1]();
+    cudaMalloc(&dobj_size, obj_num1*sizeof(float));
+    cudaMalloc(&dobj_shine, obj_num1*sizeof(float));
+    cudaMalloc(&dobj_refl, obj_num1*sizeof(float));
 
-    //alloc mem for all device arrays
-    cudaMalloc((void **)&dobj_size, obj_num1*sizeof(float));
-    cudaMalloc((void **)&dobj_shine, obj_num1*sizeof(float));
-    cudaMalloc((void **)&dobj_refl, obj_num1*sizeof(float));
-
-    cudaMalloc((void **)&dpixels, n*sizeof(float3));
-    cudaMalloc((void **)&dpix_loc, n*sizeof(float2));
-    cudaMalloc((void **)&dobj_pos, obj_num1*sizeof(float3));
-    cudaMalloc((void **)&dobj_amb, obj_num1*sizeof(float3));
-    cudaMalloc((void **)&dobj_diff, obj_num1*sizeof(float3));
-    cudaMalloc((void **)&dobj_spec, obj_num1*sizeof(float3));
-    cudaMalloc((void **)&dcameras, f1*sizeof(float3));
-    cudaMalloc((void **)&dlights, f1*sizeof(float3));
+    cudaMalloc(&dpixels, n*sizeof(float3));
+    cudaMalloc(&dpix_loc, n*sizeof(float2));
+    cudaMalloc(&dobj_pos, obj_num1*sizeof(float3));
+    cudaMalloc(&dobj_amb, obj_num1*sizeof(float3));
+    cudaMalloc(&dobj_diff, obj_num1*sizeof(float3));
+    cudaMalloc(&dobj_spec, obj_num1*sizeof(float3));
+    cudaMalloc(&dcameras, f1*sizeof(float3));
+    cudaMalloc(&dlights, f1*sizeof(float3));
 
     //copy device arrays to device
     cudaMemcpy(dobj_size, obj_size, obj_num1*sizeof(float), cudaMemcpyHostToDevice);
@@ -242,7 +273,7 @@ void rt(float *cameras, int f1, int d1, float *lights, int f2, int d2,
     cudaMemcpy(dcameras, cameras, f1*sizeof(float3), cudaMemcpyHostToDevice);
     cudaMemcpy(dlights, lights, f1*sizeof(float3), cudaMemcpyHostToDevice);
 
-    rt_kernel<<<n/1024, 1024>>>(dpixels, dobj_size, dobj_shine, dobj_refl,
+    rt_kernel<<<n/512, 512>>>(dpixels, dobj_size, dobj_shine, dobj_refl,
      dobj_pos, dobj_amb, dobj_diff, dobj_spec, dcameras, dlights, dpix_loc, obj_num1);
 
     cudaMemcpy(pixels, dpixels, n*sizeof(float3), cudaMemcpyDeviceToHost);
