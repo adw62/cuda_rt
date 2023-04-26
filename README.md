@@ -10,6 +10,8 @@ conda install -c conda-forge cudatoolkit-dev
 
 sudo apt-get install python3-dev
 
+pip3 install opencv-python
+
 # To build
 
 swig -python -c++ rt.i
