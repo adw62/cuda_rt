@@ -12,6 +12,8 @@ sudo apt-get install python3-dev
 
 pip3 install opencv-python
 
+sudo apt-get install libgl1-mesa-glx
+
 # To build
 
 swig -python -c++ rt.i
