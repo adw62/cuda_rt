@@ -1,5 +1,15 @@
 # cuda_rt
 
+# Notes on requirements
+
+pip install swig
+
+sudo apt install build-essential
+
+conda install -c conda-forge cudatoolkit-dev
+
+sudo apt-get install python3-dev
+
 # To build
 
 swig -python -c++ rt.i
