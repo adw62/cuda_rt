@@ -34,6 +34,10 @@ inline __device__ float dot(float3& a, float3& b) {
     return a.x*b.x + a.y*b.y + a.z*b.z;
 }
 
+inline __device__ float3 cross(float3& a, float3& b) {
+    return make_float3(a.y*b.z - a.z*b.y, a.z*b.x - a.x*b.z, a.x*b.y - a.y*b.x);
+}
+
 inline __device__ float3 reflect(float3& vec, float3& axis) {
     float tmp = 2*dot(vec, axis);
     float3 tmp1 = tmp*axis;
@@ -50,30 +54,12 @@ inline __device__ float3 normalize(float3& a) {
     return make_float3(a.x/mag, a.y/mag, a.z/mag);
 }
 
-inline __device__ float3 rotate(float3& a, float3& cam_angle, float3& rot_center) {
-    float3 new_pix = {0, 0, 0};
-    //rotate around z axis
-    float adjusted_x = a.x - rot_center.x;
-    float adjusted_y = a.y - rot_center.y;
-    float adjusted_z = a.z - rot_center.z;
-    new_pix.x = a.x*cos(cam_angle.z) + a.y*sin(cam_angle.z);
-    new_pix.y = -1*a.x*sin(cam_angle.z) + a.y*cos(cam_angle.z);
-    new_pix.z = a.z;
+#define TYPE_SPHERE 0
+#define TYPE_PLANE 1
+#define TYPE_BOX 2
+#define MISS 100000000.f
 
-    //rotate around y axis
-    new_pix.x = new_pix.x*cos(cam_angle.y) - new_pix.z*sin(cam_angle.y);
-    new_pix.y = new_pix.y;
-    new_pix.z = new_pix.x*sin(cam_angle.y) + new_pix.z*cos(cam_angle.y);
-
-    //rotate around x axis
-    new_pix.x = new_pix.x;
-    new_pix.y = new_pix.y*cos(cam_angle.x) + new_pix.z*sin(cam_angle.x);
-    new_pix.z = -1*new_pix.y*sin(cam_angle.x) + new_pix.z*cos(cam_angle.x);
-
-    return new_pix;
-}
-
-inline __device__ float intersect(float3& center, float& size, float3& origin, float3& direction) {
+inline __device__ float intersect_sphere(float3& center, float& size, float3& origin, float3& direction) {
     float3 tmp = origin-center;
     float b = 2*dot(direction, tmp);
     tmp = origin-center;
@@ -89,7 +75,110 @@ inline __device__ float intersect(float3& center, float& size, float3& origin, f
             return t2;
         }
     }
-    return 100000000;
+    return MISS;
+}
+
+// point is any point on the (infinite) plane, normal need not be unit length
+inline __device__ float intersect_plane(float3& point, float3& normal, float3& origin, float3& direction) {
+    float denom = dot(normal, direction);
+    if (fabsf(denom) < 1e-6f) {
+        return MISS;
+    }
+    float3 diff = point-origin;
+    float t = dot(diff, normal)/denom;
+    return t > 1e-4f ? t : MISS;
+}
+
+inline __device__ float4 quat_conj(float4& q) {
+    return make_float4(-q.x, -q.y, -q.z, q.w);
+}
+
+// standard two-cross-product quaternion rotation (no trig, no near-zero-angle
+// special case -- rotating by the identity quaternion (0,0,0,1) is an exact
+// floating-point no-op since qv is (0,0,0) and every cross-product term is 0)
+inline __device__ float3 quat_rotate(float3& v, float4& q) {
+    float3 qv = make_float3(q.x, q.y, q.z);
+    float3 t_raw = cross(qv, v);
+    float two = 2.f;
+    float3 t = two*t_raw;
+    float3 qwt = q.w*t;
+    float3 qvt = cross(qv, t);
+    float3 sum1 = v+qwt;
+    return sum1+qvt;
+}
+
+// box, optionally rotated about its center (identity quaternion = axis-aligned)
+inline __device__ float intersect_box(float3& center, float3& half_extents, float4& rotation, float3& origin, float3& direction) {
+    float3 rel = origin-center;
+    float4 inv_rot = quat_conj(rotation);
+    float3 local_origin = quat_rotate(rel, inv_rot);
+    float3 local_direction = quat_rotate(direction, inv_rot);
+    float o[3] = {local_origin.x, local_origin.y, local_origin.z};
+    float d[3] = {local_direction.x, local_direction.y, local_direction.z};
+    float h[3] = {half_extents.x, half_extents.y, half_extents.z};
+
+    float tmin = -MISS;
+    float tmax = MISS;
+    for (int axis = 0; axis < 3; ++axis) {
+        if (fabsf(d[axis]) < 1e-8f) {
+            if (o[axis] < -h[axis] || o[axis] > h[axis]) {
+                return MISS;
+            }
+            continue;
+        }
+        float t1 = (-h[axis]-o[axis])/d[axis];
+        float t2 = (h[axis]-o[axis])/d[axis];
+        if (t1 > t2) {
+            float swap = t1; t1 = t2; t2 = swap;
+        }
+        tmin = fmaxf(tmin, t1);
+        tmax = fminf(tmax, t2);
+        if (tmin > tmax) {
+            return MISS;
+        }
+    }
+    if (tmin > 1e-4f) {
+        return tmin;
+    }
+    if (tmax > 1e-4f) {
+        return tmax;
+    }
+    return MISS;
+}
+
+inline __device__ float3 flip(float3& v) {
+    return make_float3(-v.x, -v.y, -v.z);
+}
+
+// normal at a hit point, dispatched on object type. The sphere branch is
+// exactly the original (pre-multi-primitive) normal computation, unchanged,
+// to keep sphere-only scenes rendering identically.
+inline __device__ float3 surface_normal(int type, float3& center, float3& param1, float4& rotation, float3& hit, float3& incoming) {
+    if (type == TYPE_PLANE) {
+        float3 n = normalize(param1);
+        if (dot(n, incoming) > 0) {
+            n = flip(n);
+        }
+        return n;
+    }
+    if (type == TYPE_BOX) {
+        float3 rel = hit-center;
+        float4 inv_rot = quat_conj(rotation);
+        float3 local = quat_rotate(rel, inv_rot);
+        float3 n = make_float3(local.x/param1.x, local.y/param1.y, local.z/param1.z);
+        float ax = fabsf(n.x), ay = fabsf(n.y), az = fabsf(n.z);
+        float3 local_normal;
+        if (ax > ay && ax > az) {
+            local_normal = make_float3(n.x > 0 ? 1.f : -1.f, 0.f, 0.f);
+        } else if (ay > az) {
+            local_normal = make_float3(0.f, n.y > 0 ? 1.f : -1.f, 0.f);
+        } else {
+            local_normal = make_float3(0.f, 0.f, n.z > 0 ? 1.f : -1.f);
+        }
+        return quat_rotate(local_normal, rotation);
+    }
+    float3 d = hit-center;
+    return normalize(d);
 }
 
 inline __device__ void print(float3& a) {
@@ -98,14 +187,24 @@ inline __device__ void print(float3& a) {
     printf( "%6.4lf}\n", a.z);
 }
 
-inline __device__ float2 nearest_intersected_object(float3 *obj_pos, float *obj_size,
+inline __device__ float2 nearest_intersected_object(int *obj_type, float3 *obj_pos, float3 *obj_param1, float4 *obj_rot, float *obj_size,
  float3& origin, float3 direction, int& num_obj) {
     float nearest_obj = num_obj+1;
-    float min_dist = 100000000;
+    float min_dist = MISS;
     for (int j = 0; j < num_obj; ++j) {
         float3 center = obj_pos[j];
-        float size = obj_size[j];
-        float calc_dist = intersect(center, size, origin, direction);
+        float calc_dist;
+        if (obj_type[j] == TYPE_PLANE) {
+            float3 normal = obj_param1[j];
+            calc_dist = intersect_plane(center, normal, origin, direction);
+        } else if (obj_type[j] == TYPE_BOX) {
+            float3 half_extents = obj_param1[j];
+            float4 rotation = obj_rot[j];
+            calc_dist = intersect_box(center, half_extents, rotation, origin, direction);
+        } else {
+            float size = obj_size[j];
+            calc_dist = intersect_sphere(center, size, origin, direction);
+        }
         if (calc_dist < min_dist){
             nearest_obj = j;
             min_dist = calc_dist;
@@ -116,7 +215,7 @@ inline __device__ float2 nearest_intersected_object(float3 *obj_pos, float *obj_
 
 __global__
 void rt_kernel(float3 *dpixels, float *dobj_size, float *dobj_shine, float *dobj_refl,
- float3 *dobj_pos, float3 *dobj_amb, float3 *dobj_diff, float3 *dobj_spec,
+ int *dobj_type, float3 *dobj_pos, float3 *dobj_param1, float4 *dobj_rot, float3 *dobj_amb, float3 *dobj_diff, float3 *dobj_spec,
   float3 *dcameras, float3 *dlights, float2 *dpix_loc, int num_obj) {
     int i = blockIdx.x*blockDim.x + threadIdx.x;
 
@@ -128,16 +227,22 @@ void rt_kernel(float3 *dpixels, float *dobj_size, float *dobj_shine, float *dobj
     float tmp1 = 0;
     float3 tmp = {0, 0, 0};
 
-    float3 cam_angle = dcameras[1];
-    float3 cam = dcameras[0];
+    //camera is a (position, forward, up) basis: right/up are re-derived each
+    //frame so interpolated forward/up keyframes stay orthonormal
+    float3 eye = dcameras[0];
+    float3 forward = normalize(dcameras[1]);
+    float3 up_raw = dcameras[2];
+    float3 right_raw = cross(forward, up_raw);
+    float3 right = normalize(right_raw);
+    float3 up = cross(right, forward);
 
-    cam = rotate(cam, cam_angle, dcameras[2]);
-    float3 origin = cam;
+    float3 origin = eye;
 
-    //the screen is tied to the camera
-    tmp = {dpix_loc[i].x+cam.x, dpix_loc[i].y+cam.y, 0+(cam.z-1)};
-    float3 pixel = rotate(tmp, cam_angle, dcameras[2]);
-    float3 direction = pixel-origin;
+    //the screen is tied to the camera basis
+    float3 screen_x = dpix_loc[i].x*right;
+    float3 screen_y = dpix_loc[i].y*up;
+    tmp = forward+screen_x;
+    float3 direction = tmp+screen_y;
     direction = normalize(direction);
 
     int max_depth = 3;
@@ -159,21 +264,20 @@ void rt_kernel(float3 *dpixels, float *dobj_size, float *dobj_shine, float *dobj
     for (int k = 0; k < max_depth; ++k) {
         //look for distance to objects
         //{nearest_obj, min_dist}
-        res = nearest_intersected_object(dobj_pos, dobj_size, origin, direction, num_obj);
+        res = nearest_intersected_object(dobj_type, dobj_pos, dobj_param1, dobj_rot, dobj_size, origin, direction, num_obj);
         int nearest_obj = res.x;
         if (nearest_obj > num_obj){
             break;
         }
         tmp = res.y*direction;
         intersection = origin + tmp;
-        tmp = intersection - dobj_pos[nearest_obj];
-        normal_to_surface  = normalize(tmp);
+        normal_to_surface = surface_normal(dobj_type[nearest_obj], dobj_pos[nearest_obj], dobj_param1[nearest_obj], dobj_rot[nearest_obj], intersection, direction);
         tmp = shift*normal_to_surface;
         shifted_point = intersection + tmp;
         tmp = light - shifted_point;
         intersection_to_light = normalize(tmp);
 
-        res1 = nearest_intersected_object(dobj_pos, dobj_size, shifted_point, intersection_to_light, num_obj);
+        res1 = nearest_intersected_object(dobj_type, dobj_pos, dobj_param1, dobj_rot, dobj_size, shifted_point, intersection_to_light, num_obj);
         tmp = light-intersection;
         intersection_to_light_distance = norm_(tmp);
         if (res1.y < intersection_to_light_distance) {
@@ -191,7 +295,7 @@ void rt_kernel(float3 *dpixels, float *dobj_size, float *dobj_shine, float *dobj
         illumination += tmp;
 
         //specular
-        tmp = cam - intersection;
+        tmp = eye - intersection;
         intersection_to_camera = normalize(tmp);
         tmp = intersection_to_light + intersection_to_camera;
         H = normalize(tmp);
@@ -213,7 +317,10 @@ void rt_kernel(float3 *dpixels, float *dobj_size, float *dobj_shine, float *dobj
 }
 
 void rt(float *cameras, int f1, int d1, float *lights, int f2, int d2,
+                int *obj_type, int obj_num0,
                 float *obj_pos, int obj_num1, int d3,
+                float *obj_param1, int obj_num1b, int d3b,
+                float *obj_rot, int obj_num1c, int d3c,
                 float *obj_amb, int obj_num2, int d4,
                 float *obj_diff, int obj_num3, int d5,
                 float *obj_spec, int obj_num4, int d6,
@@ -226,6 +333,9 @@ void rt(float *cameras, int f1, int d1, float *lights, int f2, int d2,
     //check number of frames for camera and light are the same
     //assert(f1==f2);
     //check number of objects the same in all data input
+    assert(obj_num0==obj_num1);
+    assert(obj_num1==obj_num1b);
+    assert(obj_num1==obj_num1c);
     assert(obj_num1==obj_num2);
     assert(obj_num2==obj_num3);
     assert(obj_num3==obj_num4);
@@ -236,16 +346,21 @@ void rt(float *cameras, int f1, int d1, float *lights, int f2, int d2,
     assert(d1==3);
     assert(d1==d2);
     assert(d2==d3);
+    assert(d3==d3b);
+    assert(d3c==4);
     assert(d3==d4);
     assert(d4==d5);
     assert(d5==d6);
     //check pixel dim is same between color array and location array
     assert(n==n1);
 
-    float3 *dpixels, *dobj_pos, *dobj_amb, *dobj_diff, *dobj_spec, *dcameras, *dlights;
+    float3 *dpixels, *dobj_pos, *dobj_param1, *dobj_amb, *dobj_diff, *dobj_spec, *dcameras, *dlights;
+    float4 *dobj_rot;
     float *dobj_size, *dobj_shine, *dobj_refl;
+    int *dobj_type;
     float2 *dpix_loc;
 
+    cudaMalloc(&dobj_type, obj_num1*sizeof(int));
     cudaMalloc(&dobj_size, obj_num1*sizeof(float));
     cudaMalloc(&dobj_shine, obj_num1*sizeof(float));
     cudaMalloc(&dobj_refl, obj_num1*sizeof(float));
@@ -253,6 +368,8 @@ void rt(float *cameras, int f1, int d1, float *lights, int f2, int d2,
     cudaMalloc(&dpixels, n*sizeof(float3));
     cudaMalloc(&dpix_loc, n*sizeof(float2));
     cudaMalloc(&dobj_pos, obj_num1*sizeof(float3));
+    cudaMalloc(&dobj_param1, obj_num1*sizeof(float3));
+    cudaMalloc(&dobj_rot, obj_num1*sizeof(float4));
     cudaMalloc(&dobj_amb, obj_num1*sizeof(float3));
     cudaMalloc(&dobj_diff, obj_num1*sizeof(float3));
     cudaMalloc(&dobj_spec, obj_num1*sizeof(float3));
@@ -260,6 +377,7 @@ void rt(float *cameras, int f1, int d1, float *lights, int f2, int d2,
     cudaMalloc(&dlights, f1*sizeof(float3));
 
     //copy device arrays to device
+    cudaMemcpy(dobj_type, obj_type, obj_num1*sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(dobj_size, obj_size, obj_num1*sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(dobj_shine, obj_shine, obj_num1*sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(dobj_refl, obj_refl, obj_num1*sizeof(float), cudaMemcpyHostToDevice);
@@ -267,6 +385,8 @@ void rt(float *cameras, int f1, int d1, float *lights, int f2, int d2,
     cudaMemcpy(dpixels, pixels, n*sizeof(float3), cudaMemcpyHostToDevice);
     cudaMemcpy(dpix_loc, pix_loc, n*sizeof(float2), cudaMemcpyHostToDevice);
     cudaMemcpy(dobj_pos, obj_pos, obj_num1*sizeof(float3), cudaMemcpyHostToDevice);
+    cudaMemcpy(dobj_param1, obj_param1, obj_num1*sizeof(float3), cudaMemcpyHostToDevice);
+    cudaMemcpy(dobj_rot, obj_rot, obj_num1*sizeof(float4), cudaMemcpyHostToDevice);
     cudaMemcpy(dobj_amb, obj_amb, obj_num1*sizeof(float3), cudaMemcpyHostToDevice);
     cudaMemcpy(dobj_diff, obj_diff, obj_num1*sizeof(float3), cudaMemcpyHostToDevice);
     cudaMemcpy(dobj_spec, obj_spec, obj_num1*sizeof(float3), cudaMemcpyHostToDevice);
@@ -274,13 +394,16 @@ void rt(float *cameras, int f1, int d1, float *lights, int f2, int d2,
     cudaMemcpy(dlights, lights, f1*sizeof(float3), cudaMemcpyHostToDevice);
 
     rt_kernel<<<n/512, 512>>>(dpixels, dobj_size, dobj_shine, dobj_refl,
-     dobj_pos, dobj_amb, dobj_diff, dobj_spec, dcameras, dlights, dpix_loc, obj_num1);
+     dobj_type, dobj_pos, dobj_param1, dobj_rot, dobj_amb, dobj_diff, dobj_spec, dcameras, dlights, dpix_loc, obj_num1);
 
     cudaMemcpy(pixels, dpixels, n*sizeof(float3), cudaMemcpyDeviceToHost);
 
     cudaFree(dpixels);
     cudaFree(dpix_loc);
+    cudaFree(dobj_type);
     cudaFree(dobj_pos);
+    cudaFree(dobj_param1);
+    cudaFree(dobj_rot);
     cudaFree(dobj_amb);
     cudaFree(dobj_diff);
     cudaFree(dobj_spec);
