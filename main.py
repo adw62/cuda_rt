@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 import os
+from PIL import Image
 
 class Scene():
     def __init__(self, x, y, cameras, lights, frames):
@@ -70,6 +71,21 @@ class Scene():
         cv2.destroyAllWindows()
         video.release()
 
+    def make_gif(self, path='video.gif', fps=18, max_width=480):
+        # Lightweight companion to the .avi -- downscaled so it's small enough
+        # to embed inline in a README/PR (GitHub renders .gif inline, not .avi).
+        print('Assembling frames into gif')
+        image_folder = 'img'
+        images = sorted(img for img in os.listdir(image_folder) if img.endswith('.png'))
+        frames = []
+        for name in images:
+            im = Image.open(os.path.join(image_folder, name)).convert('RGB')
+            if max_width and im.width > max_width:
+                new_height = int(im.height * (max_width / im.width))
+                im = im.resize((max_width, new_height), Image.LANCZOS)
+            frames.append(im)
+        frames[0].save(path, save_all=True, append_images=frames[1:], duration=1000 / fps, loop=0)
+
 TYPE_IDS = {'sphere': 0, 'plane': 1, 'box': 2}
 
 
@@ -100,3 +116,4 @@ if __name__ == '__main__':
     S.build()
     S.render()
     S.make_video()
+    S.make_gif()

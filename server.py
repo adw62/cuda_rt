@@ -96,6 +96,7 @@ def render_status(job_id):
     resp = {'done': done, 'total': job['total'], 'finished': finished, 'error': error}
     if finished and error is None:
         resp['video_url'] = f'/api/render/{job_id}/video'
+        resp['gif_url'] = f'/api/render/{job_id}/gif'
     return jsonify(resp)
 
 
@@ -108,6 +109,17 @@ def render_video(job_id):
     if not video_path.exists():
         abort(404, 'video not ready')
     return send_file(video_path, mimetype='video/x-msvideo')
+
+
+@app.route('/api/render/<job_id>/gif', methods=['GET'])
+def render_gif(job_id):
+    job = jobs.get(job_id)
+    if job is None:
+        abort(404, 'no such render job')
+    gif_path = job['dir'] / 'video.gif'
+    if not gif_path.exists():
+        abort(404, 'gif not ready')
+    return send_file(gif_path, mimetype='image/gif')
 
 
 if __name__ == '__main__':

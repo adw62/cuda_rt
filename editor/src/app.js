@@ -490,7 +490,8 @@ async function poll(jobId) {
     if (status.finished) {
       renderStatusEl.innerHTML = status.error
         ? `Render failed: ${status.error}`
-        : `Done: <a href="${status.video_url}" target="_blank">open video</a>`;
+        : `Done: <a href="${status.video_url}" target="_blank">open .avi</a> -- ` +
+          `<img src="${status.gif_url}" alt="render preview" style="height:60px;vertical-align:middle;" />`;
       return;
     }
     setTimeout(() => poll(jobId), 1000);

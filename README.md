@@ -24,7 +24,11 @@ nvcc -shared rt.o rt_wrap.o -o _rt.so
 
 # To run
 
-python main.py
+python main.py [scenes/some_scene.json]
+
+Defaults to `scenes/demo.json` if no scene is given. Writes rendered frames to `img/`, then
+`video.avi` (full quality) and `video.gif` (downscaled, for sharing/embedding -- GitHub renders
+`.gif` inline but not `.avi`).
 
 ![video](https://user-images.githubusercontent.com/38112687/167273814-3c1bccad-3996-497a-a499-e88ecb39c672.gif)
 
