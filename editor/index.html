@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>cuda_rt scene editor</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1b1b1f; color: #ddd; font: 13px/1.4 -apple-system, Segoe UI, sans-serif; }
+  #app { display: flex; flex-direction: column; height: 100%; }
+
+  #toolbar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #26262b; border-bottom: 1px solid #000; flex: 0 0 auto; }
+  #toolbar button { background: #3a3a42; color: #ddd; border: 1px solid #000; border-radius: 3px; padding: 4px 10px; cursor: pointer; }
+  #toolbar button:hover { background: #46464f; }
+  #toolbar button:disabled { opacity: 0.4; cursor: default; }
+  #toolbar button.selected { background: #45577a; }
+  #toolbar .sep { width: 1px; height: 20px; background: #444; margin: 0 4px; }
+  #render-status { margin-left: 8px; color: #9c9; }
+  .res-label { color: #999; font-size: 12px; }
+  .res-input { width: 62px; background: #3a3a42; color: #ddd; border: 1px solid #000; border-radius: 3px; padding: 4px 6px; }
+
+  #main { flex: 1 1 auto; display: flex; min-height: 0; }
+
+  #left-panel { width: 220px; flex: 0 0 auto; background: #202024; border-right: 1px solid #000; display: flex; flex-direction: column; overflow: auto; }
+  #fixed-selection { display: flex; flex-direction: column; padding: 8px; gap: 4px; border-bottom: 1px solid #333; }
+  #fixed-selection button { text-align: left; background: #2c2c32; color: #ddd; border: 1px solid #000; border-radius: 3px; padding: 6px 8px; cursor: pointer; }
+  #fixed-selection button.selected { background: #45577a; }
+
+  #outliner-list { padding: 8px; }
+  .outliner-add-row { display: flex; gap: 4px; margin-bottom: 6px; }
+  .outliner-add { flex: 1; background: #2c2c32; color: #ddd; border: 1px solid #000; border-radius: 3px; padding: 6px 2px; cursor: pointer; font-size: 11px; }
+  .outliner-row { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px; border-radius: 3px; cursor: pointer; }
+  .outliner-row:hover { background: #2a2a30; }
+  .outliner-row.selected { background: #45577a; }
+  .outliner-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .outliner-delete { background: none; border: none; color: #c66; cursor: pointer; font-size: 14px; padding: 0 4px; }
+
+  #viewport { flex: 1 1 auto; position: relative; min-width: 0; }
+  #viewport canvas { display: block; width: 100%; height: 100%; }
+
+  #right-panel { width: 260px; flex: 0 0 auto; background: #202024; border-left: 1px solid #000; overflow: auto; padding: 10px; }
+  .field { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; font-size: 12px; color: #bbb; }
+  .field input[type=range] { width: 100%; }
+  .field-checkbox { flex-direction: row; align-items: center; gap: 6px; }
+  .field-checkbox input[type=checkbox] { width: auto; }
+  .inspector-empty, .inspector-note { color: #888; font-style: italic; margin-bottom: 10px; }
+
+  #timeline-wrap { flex: 0 0 auto; height: 190px; background: #1e1e22; border-top: 1px solid #000; display: flex; flex-direction: column; }
+  #timeline-toolbar { display: flex; gap: 8px; padding: 4px 8px; }
+  #timeline { flex: 1 1 auto; display: flex; overflow: hidden; }
+  .timeline-labels { flex: 0 0 130px; overflow: hidden; background: #202024; }
+  .timeline-row-label { display: flex; align-items: center; justify-content: space-between; padding: 0 6px; font-size: 11px; color: #bbb; border-bottom: 1px solid #1a1a1a; }
+  .timeline-row-label button { background: none; border: 1px solid #444; color: #bbb; border-radius: 2px; width: 16px; height: 16px; line-height: 1; cursor: pointer; font-size: 11px; }
+  .timeline-canvas-wrap { flex: 1 1 auto; overflow: hidden; }
+  .timeline-canvas-wrap canvas { display: block; outline: none; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="toolbar">
+    <button id="save-scene">Save Scene</button>
+    <button id="load-scene">Load Scene</button>
+    <div class="sep"></div>
+    <button id="fly-toggle">Fly Camera</button>
+    <button id="insert-cam-key" disabled>Insert Camera Keyframe (K)</button>
+    <div class="sep"></div>
+    <button id="mode-translate">Move (1)</button>
+    <button id="mode-rotate">Rotate (2)</button>
+    <button id="mode-scale">Scale (3)</button>
+    <div class="sep"></div>
+    <button id="play-toggle">Play</button>
+    <div class="sep"></div>
+    <button id="bake-physics">Bake Physics</button>
+    <div class="sep"></div>
+    <span class="res-label">Res</span>
+    <input id="res-x" class="res-input" type="number" min="16" step="1" title="Render width (px)" />
+    <span class="res-label">x</span>
+    <input id="res-y" class="res-input" type="number" min="16" step="1" title="Render height (px)" />
+    <button id="res-preview">Preview Res</button>
+    <button id="res-final">Final Res</button>
+    <div class="sep"></div>
+    <button id="render-scene">Render</button>
+    <span id="render-status"></span>
+  </div>
+
+  <div id="main">
+    <div id="left-panel">
+      <div id="fixed-selection">
+        <button id="select-camera">Camera</button>
+        <button id="select-light">Light</button>
+      </div>
+      <div id="outliner-list"></div>
+    </div>
+
+    <div id="viewport"></div>
+
+    <div id="right-panel">
+      <div id="inspector"></div>
+    </div>
+  </div>
+
+  <div id="timeline-wrap">
+    <div id="timeline"></div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/three.module.js",
+    "three/addons/": "./vendor/three/addons/",
+    "cannon-es": "./vendor/cannon-es/cannon-es.js"
+  }
+}
+</script>
+<script type="module" src="./src/app.js"></script>
+</body>
+</html>

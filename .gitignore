@@ -1,0 +1,9 @@
+rt.py
+rt_wrap.cxx
+*.o
+_rt.so
+img/
+video.avi
+__pycache__/
+jobs/
+editor/vendor/

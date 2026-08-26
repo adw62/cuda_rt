@@ -1,0 +1,55 @@
+{
+  "frames": 60,
+  "resolution": {"x": 512, "y": 768},
+  "objects": [
+    {
+      "id": "ground",
+      "type": "plane",
+      "normal": [0, 1, 0],
+      "shine": 60,
+      "reflection": 0.15,
+      "ambient": [0.05, 0.05, 0.08],
+      "diffusion": [0.25, 0.3, 0.35],
+      "specular": [0.6, 0.6, 0.6],
+      "position_keyframes": [{"frame": 0, "pos": [0, -0.6, 0]}]
+    },
+    {
+      "id": "box",
+      "type": "box",
+      "half_extents": [0.4, 0.4, 0.4],
+      "shine": 100,
+      "reflection": 0.2,
+      "ambient": [0.1, 0.05, 0],
+      "diffusion": [0.8, 0.5, 0.1],
+      "specular": [1, 1, 1],
+      "position_keyframes": [
+        {"frame": 0, "pos": [-0.7, -0.2, -1.5]},
+        {"frame": 59, "pos": [0.7, -0.2, -1.5]}
+      ]
+    },
+    {
+      "id": "sphere",
+      "size": 0.35,
+      "shine": 150,
+      "reflection": 0.5,
+      "ambient": [0.1, 0, 0],
+      "diffusion": [0.8, 0.1, 0.1],
+      "specular": [1, 1, 1],
+      "position_keyframes": [
+        {"frame": 0, "pos": [0.6, -0.25, -1]},
+        {"frame": 59, "pos": [-0.6, -0.25, -1]}
+      ]
+    }
+  ],
+  "camera": {
+    "keyframes": [
+      {"frame": 0, "position": [0, 0.6, 2], "forward": [0, -0.2, -1], "up": [0, 1, 0]}
+    ]
+  },
+  "light": {
+    "keyframes": [
+      {"frame": 0, "position": [-3, 3, 3]},
+      {"frame": 59, "position": [3, 3, 3]}
+    ]
+  }
+}

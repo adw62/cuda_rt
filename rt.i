@@ -14,7 +14,10 @@
 %apply (float* IN_ARRAY2, int DIM1, int DIM2) {(float* cameras, int d1, int f1)}
 %apply (float* IN_ARRAY2, int DIM1, int DIM2) {(float* lights, int d2, int f2)}
 
+%apply (int* IN_ARRAY1, int DIM1) {(int* obj_type, int obj_num0)}
 %apply (float* IN_ARRAY2, int DIM1, int DIM2) {(float* obj_pos, int obj_num1, int d3)}
+%apply (float* IN_ARRAY2, int DIM1, int DIM2) {(float* obj_param1, int obj_num1b, int d3b)}
+%apply (float* IN_ARRAY2, int DIM1, int DIM2) {(float* obj_rot, int obj_num1c, int d3c)}
 %apply (float* IN_ARRAY2, int DIM1, int DIM2) {(float* obj_amb, int obj_num2, int d4)}
 %apply (float* IN_ARRAY2, int DIM1, int DIM2) {(float* obj_diff, int obj_num3, int d5)}
 %apply (float* IN_ARRAY2, int DIM1, int DIM2) {(float* obj_spec, int obj_num4, int d6)}
@@ -23,6 +26,8 @@
 %apply (float* IN_ARRAY1, int DIM1) {(float* obj_size, int obj_num5)}
 %apply (float* IN_ARRAY1, int DIM1) {(float* obj_shine, int obj_num6)}
 %apply (float* IN_ARRAY1, int DIM1) {(float* obj_refl, int obj_num7)}
+%apply (float* IN_ARRAY1, int DIM1) {(float* obj_transparency, int obj_num8)}
+%apply (float* IN_ARRAY1, int DIM1) {(float* obj_ior, int obj_num9)}
 
 %apply (float* INPLACE_ARRAY2, int DIM1, int DIM2) {(float* pixels, int n, int m)}
 

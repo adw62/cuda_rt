@@ -1,0 +1,70 @@
+{
+  "frames": 100,
+  "resolution": {"x": 1024, "y": 1536},
+  "objects": [
+    {
+      "id": "a",
+      "size": 0.7,
+      "shine": 100,
+      "reflection": 0.5,
+      "ambient": [0.1, 0, 0],
+      "diffusion": [0.7, 0, 0],
+      "specular": [1, 1, 1],
+      "position_keyframes": [
+        {"frame": 0, "pos": [-0.2, 0, -1]}
+      ]
+    },
+    {
+      "id": "b",
+      "size": 0.1,
+      "shine": 100,
+      "reflection": 0.5,
+      "ambient": [0.1, 0, 0.1],
+      "diffusion": [0.7, 0.0, 0.7],
+      "specular": [1, 1, 1],
+      "position_keyframes": [
+        {"frame": 0, "pos": [0.1, -0.3, 0]},
+        {"frame": 24, "pos": [1, -0.3, 0]},
+        {"frame": 49, "pos": [1, 1, 0]},
+        {"frame": 74, "pos": [0.1, 1, 0]},
+        {"frame": 99, "pos": [0.1, -0.3, 0]}
+      ]
+    },
+    {
+      "id": "c",
+      "size": 0.15,
+      "shine": 100,
+      "reflection": 0.5,
+      "ambient": [0, 0.1, 0],
+      "diffusion": [0, 0.6, 0],
+      "specular": [1, 1, 1],
+      "position_keyframes": [
+        {"frame": 0, "pos": [-0.3, 0, 0]}
+      ]
+    },
+    {
+      "id": "d",
+      "size": 8999.3,
+      "shine": 100,
+      "reflection": 0.5,
+      "ambient": [0.1, 0.1, 0.1],
+      "diffusion": [0.6, 0.6, 0.6],
+      "specular": [1, 1, 1],
+      "position_keyframes": [
+        {"frame": 0, "pos": [0, -9000, 0]}
+      ]
+    }
+  ],
+  "camera": {
+    "keyframes": [
+      {"frame": 0, "position": [0, 0, 2], "forward": [0, 0, -1], "up": [0, 1, 0]},
+      {"frame": 99, "position": [0, 0, 3], "forward": [0, 0, -1], "up": [0, 1, 0]}
+    ]
+  },
+  "light": {
+    "keyframes": [
+      {"frame": 0, "position": [-10, 5, 5]},
+      {"frame": 99, "position": [10, 5, 5]}
+    ]
+  }
+}
