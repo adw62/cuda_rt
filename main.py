@@ -22,6 +22,8 @@ class Scene():
         self.obj_size = None
         self.obj_shine = None
         self.obj_refl = None
+        self.obj_transparency = None
+        self.obj_ior = None
         self.obj_pos = None
         self.obj_param1 = None
         self.obj_rot = None
@@ -38,18 +40,24 @@ class Scene():
         self.obj_size = np.array([x.size for x in self.objects], 'f')
         self.obj_shine = np.array([x.shine for x in self.objects], 'f')
         self.obj_refl = np.array([x.reflection for x in self.objects], 'f')
+        self.obj_transparency = np.array([x.transparency for x in self.objects], 'f')
+        self.obj_ior = np.array([x.ior for x in self.objects], 'f')
         self.obj_pos = np.array([x.positions for x in self.objects], 'f')
         self.obj_pos = np.transpose(self.obj_pos, (1, 0, 2))
         self.obj_param1 = np.array([x.param1 or [0, 0, 0] for x in self.objects], 'f')
-        self.obj_rot = np.array([x.rotation or [0, 0, 0, 1] for x in self.objects], 'f')
+        # per-frame like obj_pos: static objects just repeat the same quaternion
+        # every frame, a rolling checkered sphere gets one that actually spins
+        self.obj_rot = np.array([x.rotations for x in self.objects], 'f')
+        self.obj_rot = np.transpose(self.obj_rot, (1, 0, 2))
         print('Built {} object(s)'.format(len(self.objects)))
 
     def render(self):
         for i in range(self.frames):
             print('Rendering frame {}/{}'.format(i, self.frames))
-            rt(self.cameras[i], self.lights[i], self.obj_type, self.obj_pos[i], self.obj_param1, self.obj_rot,
+            rt(self.cameras[i], self.lights[i], self.obj_type, self.obj_pos[i], self.obj_param1, self.obj_rot[i],
                self.obj_amb, self.obj_diff, self.obj_spec,
-               self.obj_size, self.obj_shine, self.obj_refl, self.pixels, self.pix_loc)
+               self.obj_size, self.obj_shine, self.obj_refl, self.obj_transparency, self.obj_ior,
+               self.pixels, self.pix_loc)
             self.pixels = np.clip(self.pixels, 0, 1)
             self.pixels.shape = (self.x, self.y, 3)
             plt.imsave(f'./img/{i:03}_img.png', self.pixels)
@@ -90,7 +98,8 @@ TYPE_IDS = {'sphere': 0, 'plane': 1, 'box': 2}
 
 
 class Primitive():
-    def __init__(self, type, size, shine, reflection, ambient, diffusion, specular, positions, param1=None, rotation=None):
+    def __init__(self, type, size, shine, reflection, ambient, diffusion, specular, positions, param1=None, rotation=None,
+                 transparency=0.0, ior=1.5):
         assert type in TYPE_IDS
         self.type = type
         self.ambient = ambient
@@ -100,10 +109,16 @@ class Primitive():
         self.shine = shine
         self.reflection = reflection
         self.positions = positions
-        # meaning depends on type: unused for sphere, normal for plane, half-extents for box
+        # 0 = opaque (default, existing behavior unchanged), 1 = fully clear;
+        # splits into a Fresnel-weighted reflect/refract ray pair in rt.cu
+        self.transparency = transparency
+        # index of refraction, only meaningful once transparency > 0
+        self.ior = ior
+        # meaning depends on type: checker on/off for sphere, normal for plane, half-extents for box
         self.param1 = param1
-        # quaternion (x,y,z,w); box-only, None means identity (axis-aligned)
-        self.rotation = rotation
+        # one quaternion (x,y,z,w) per frame; box is a static pose repeated every
+        # frame, a rolling checkered sphere gets a spinning track, None means identity
+        self.rotations = rotation or [[0, 0, 0, 1]] * len(positions)
 
 
 if __name__ == '__main__':

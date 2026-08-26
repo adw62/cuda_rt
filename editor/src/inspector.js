@@ -65,6 +65,37 @@ export class Inspector {
     refl.oninput = () => this._set({ reflection: parseFloat(refl.value) });
     this.el.appendChild(field(`Reflection (${obj.reflection.toFixed(2)})`, refl));
 
+    const transparency = document.createElement('input');
+    transparency.type = 'range';
+    transparency.min = '0';
+    transparency.max = '1';
+    transparency.step = '0.01';
+    transparency.value = obj.transparency;
+    transparency.oninput = () => {
+      const crossesZero = (obj.transparency > 0) !== (parseFloat(transparency.value) > 0);
+      this._set({ transparency: parseFloat(transparency.value) });
+      if (crossesZero) this.render(obj); // toggles the IOR field's visibility
+    };
+    this.el.appendChild(field(`Transparency (${obj.transparency.toFixed(2)})`, transparency));
+
+    if (obj.transparency > 0) {
+      const ior = document.createElement('input');
+      ior.type = 'range';
+      ior.min = '1';
+      ior.max = '2.5';
+      ior.step = '0.01';
+      ior.value = obj.ior;
+      ior.oninput = () => this._set({ ior: parseFloat(ior.value) });
+      this.el.appendChild(field(`IOR (${obj.ior.toFixed(2)}) -- 1.33 water, 1.5 glass, 2.4 diamond`, ior));
+    }
+
+    if (obj.transparency > 0) {
+      const tintNote = document.createElement('div');
+      tintNote.className = 'inspector-note';
+      tintNote.textContent = 'Diffusion doubles as the glass tint here -- near-white gives clear glass, a saturated color gives colored glass.';
+      this.el.appendChild(tintNote);
+    }
+
     for (const key of ['ambient', 'diffusion', 'specular']) {
       const color = document.createElement('input');
       color.type = 'color';
@@ -159,6 +190,18 @@ export class Inspector {
       size.value = obj.size;
       size.oninput = () => this._set({ size: parseFloat(size.value) });
       this.el.appendChild(field(`Size (${obj.size.toFixed(2)})`, size));
+
+      const checkerWrap = document.createElement('label');
+      checkerWrap.className = 'field field-checkbox';
+      const checkerBox = document.createElement('input');
+      checkerBox.type = 'checkbox';
+      checkerBox.checked = !!obj.checker;
+      checkerBox.onchange = () => this._set({ checker: checkerBox.checked });
+      const checkerLabel = document.createElement('span');
+      checkerLabel.textContent = 'Checkered (spins as it rolls)';
+      checkerWrap.appendChild(checkerBox);
+      checkerWrap.appendChild(checkerLabel);
+      this.el.appendChild(checkerWrap);
     }
   }
 

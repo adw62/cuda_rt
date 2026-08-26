@@ -9,5 +9,7 @@ void rt(float *cameras, int d1, int f1, float *lights, int d2, int f2,
                 float *obj_size, int obj_num5,
                 float *obj_shine, int obj_num6,
                 float *obj_refl, int obj_num7,
+                float *obj_transparency, int obj_num8,
+                float *obj_ior, int obj_num9,
                 float *pixels, int n, int m,
                 float *pix_loc, int n1, int d7);

@@ -26,6 +26,8 @@
 %apply (float* IN_ARRAY1, int DIM1) {(float* obj_size, int obj_num5)}
 %apply (float* IN_ARRAY1, int DIM1) {(float* obj_shine, int obj_num6)}
 %apply (float* IN_ARRAY1, int DIM1) {(float* obj_refl, int obj_num7)}
+%apply (float* IN_ARRAY1, int DIM1) {(float* obj_transparency, int obj_num8)}
+%apply (float* IN_ARRAY1, int DIM1) {(float* obj_ior, int obj_num9)}
 
 %apply (float* INPLACE_ARRAY2, int DIM1, int DIM2) {(float* pixels, int n, int m)}
 

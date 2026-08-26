@@ -66,6 +66,26 @@ scene.add(cameraHelper);
 
 const meshes = new Map(); // objectId -> THREE.Mesh
 
+// Cheap stand-in for the CUDA octant checker (not a pixel-accurate match --
+// this is a UV-mapped grid, the renderer's is an axis-sign octant split) --
+// good enough to see a checkered sphere actually spinning in the viewport.
+function makeCheckerTexture() {
+  const size = 128;
+  const squares = 8;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const step = size / squares;
+  for (let y = 0; y < squares; y++) {
+    for (let x = 0; x < squares; x++) {
+      ctx.fillStyle = (x + y) % 2 === 0 ? '#ffffff' : '#555555';
+      ctx.fillRect(x * step, y * step, step, step);
+    }
+  }
+  return new THREE.CanvasTexture(canvas);
+}
+const checkerTexture = makeCheckerTexture();
+
 // Renderer-side geometry only ever has one of: sphere radius, box half-extents,
 // or plane normal, matching the `type`-dispatched param1 on the CUDA side.
 function geometryFor(obj) {
@@ -90,12 +110,29 @@ function orientMesh(mesh, obj) {
   }
 }
 
+function applyCheckerMap(mat, obj) {
+  mat.map = obj.type === 'sphere' && obj.checker ? checkerTexture : null;
+  mat.needsUpdate = true;
+}
+
+// Flat opacity, no bending -- a real-time refraction preview isn't worth the
+// complexity here (same trade-off as the checker: the viewport gives you a
+// visual cue, the CUDA render is the actual answer). Opacity is eased so a
+// low transparency still reads as visibly "glassy" rather than merely faded.
+function applyTransparency(mat, obj) {
+  const t = obj.transparency || 0;
+  mat.transparent = t > 0;
+  mat.opacity = 1 - t * 0.85;
+}
+
 function createMeshFor(obj) {
   const mat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(...obj.diffusion),
     roughness: 0.6,
     side: obj.type === 'plane' ? THREE.DoubleSide : THREE.FrontSide,
   });
+  applyCheckerMap(mat, obj);
+  applyTransparency(mat, obj);
   const mesh = new THREE.Mesh(geometryFor(obj), mat);
   orientMesh(mesh, obj);
   scene.add(mesh);
@@ -109,6 +146,8 @@ function syncObjectVisual(obj) {
   mesh.geometry.dispose();
   mesh.geometry = geometryFor(obj);
   mesh.material.color.setRGB(...obj.diffusion);
+  applyCheckerMap(mesh.material, obj);
+  applyTransparency(mesh.material, obj);
   orientMesh(mesh, obj);
 }
 
@@ -129,6 +168,9 @@ function updatePreview(frame) {
     const mesh = meshes.get(obj.id);
     if (!mesh) continue;
     mesh.position.set(...model.sampleObjectPosition(obj, frame));
+    if (obj.type === 'sphere') {
+      mesh.quaternion.set(...model.sampleObjectRotation(obj, frame));
+    }
   }
 
   const lightPos = model.sampleLight(frame);
