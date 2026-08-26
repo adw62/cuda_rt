@@ -66,6 +66,10 @@ rasterized Three.js preview, spawn/move/rotate/scale sphere, box, and plane obje
 positions on a timeline, and bake a physics simulation (per-object gravity/collision, initial
 velocity) into keyframes before running the real CUDA render.
 
+The editor's third-party JS (three.js, cannon-es) isn't committed to the repo -- fetch it once with:
+
+bash editor/fetch-vendor.sh
+
 python server.py
 
 Then open http://127.0.0.1:5000 in a browser.

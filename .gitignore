@@ -6,3 +6,4 @@ img/
 video.avi
 __pycache__/
 jobs/
+editor/vendor/
